@@ -15,12 +15,18 @@ void ConfigurationMenu(RFID_HANDLE32 readerHandle);
 void InventoryMenu(RFID_HANDLE32 readerHandle);
 void AccessMenu(RFID_HANDLE32 readerHandle);
 
+struct sa_rfid_info {
+	int num;
+	char id[64];
+	char rssi;
+};
+
+RFID_HANDLE32 readerHandle;
 //RFID_STATUS ConnectReader(RFID_HANDLE32 *readerHandle,wchar_t *hostName,int readerPort);
 int sa_device_rfid_open(char *host, int port)
 {
-	RFID_HANDLE32 readerHandle;
-	RFID_STATUS rfidStatus;
 
+	RFID_STATUS rfidStatus;
 	mbstowcs(hostName, host, 32);
 	wprintf(L"host: %S, port: %d\n", hostName, port);
 	rfidStatus = ConnectReader(&readerHandle, hostName, port);
@@ -31,22 +37,69 @@ int sa_device_rfid_open(char *host, int port)
 		tagStorageSettings.discardTagsOnInventoryStop = TRUE;
 		RFID_SetTagStorageSettings(readerHandle, &tagStorageSettings);
 
-		CreateEventThread(readerHandle);
+		//CreateEventThread(readerHandle);
 	} else {
 		wprintf(L"\nFailed to connect RFID\n");
 		return -1;
 	}
+
+	rfidStatus = RFID_PerformInventory(readerHandle, NULL, NULL, NULL, NULL);
+	if(RFID_API_SUCCESS != rfidStatus)
+	{
+		HandleResult(readerHandle, rfidStatus);
+		return rfidStatus;
+	}
+
 	return 0;
 }
 
 int sa_device_rfid_close(void)
 {
-
+	RFID_STATUS rfidStatus;
+	rfidStatus = RFID_StopInventory(readerHandle);
+	HandleResult(readerHandle, rfidStatus);
 }
 
-int sa_device_rfid_read(void)
+int sa_device_rfid_read(struct sa_rfid_info *rfid_info)
 {
+	TAG_DATA* pTagData = NULL;
+	pTagData = RFID_AllocateTag(readerHandle);
+	if(NULL == pTagData)
+	{
+		// Handle memory allocation failure
+		// Optimally, Tag Allocation can be done once and pointer reused till disconnection.
+		wprintf(L"RFID_AllocateTag Failed.");
+		return -1;
+	}
 
+	if (RFID_API_SUCCESS == RFID_GetReadTag(readerHandle, pTagData)) {
+
+#if 1
+		wchar_t tagBuffer[260] = {0,};
+		wchar_t* pTagReportData = tagBuffer;
+		unsigned int   index = 0;
+
+		for(index = 0; index < pTagData->tagIDLength; index++) {
+			if(0 < index && index%2 == 0)
+			{
+				//*pTagReportData++ = L'-';
+			}
+			rfid_swprintf(pTagReportData, (260-index), L"%02X", pTagData->pTagID[index]);
+			while(*pTagReportData) pTagReportData++;
+		}
+		rfid_info->num = pTagData->tagIDLength;
+		rfid_info->rssi = pTagData->peakRSSI;
+		wcstombs(rfid_info->id, tagBuffer, sizeof(rfid_info->id));
+		wprintf(L"ID:%S, RSSI:%04d\n", tagBuffer, pTagData->peakRSSI);
+#else
+		printTagDataWithResults(pTagData);
+#endif
+	}
+
+	if(pTagData)
+		RFID_DeallocateTag(readerHandle, pTagData);
+
+	return 0;
 }
 
 int sa_device_rfid_register(void)
@@ -81,13 +134,16 @@ int main(int argc, char* argv[])
 				sa_device_rfid_close();
 				break;
 			case 3:
-				sa_device_rfid_read();
+				struct sa_rfid_info rfid_info;
+				sa_device_rfid_read(&rfid_info);
+				wprintf(L"num:%d\t", rfid_info.num);
+				wprintf(L"Test ID:%s, RSSI:%04d\n", rfid_info.id, rfid_info.rssi);
 				break;
 			case 4:
 				sa_device_rfid_register();
 				break;
 			case 5:
-				exit(0);
+				exit(1);
 			default:
 				wprintf(L"\nInvalid case:");
 			break;

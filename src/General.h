@@ -1,11 +1,6 @@
 #include "stdafx.h"
 
 
-#ifdef WIN32
-#define sleep(s) Sleep(s)
-#endif
-
-
 RFID_STATUS ConnectReader(RFID_HANDLE32 *readerHandle,wchar_t *hostName,int readerPort);
 RFID_STATUS ReaderCapability(RFID_HANDLE32);
 RFID_STATUS SingulationControl(RFID_HANDLE32,LPSINGULATION_CONTROL);
@@ -33,6 +28,8 @@ RFID_STATUS WriteAccessMultipleTags(RFID_HANDLE32);
 RFID_STATUS LockAccessMultipleTags(RFID_HANDLE32);
 RFID_STATUS KillAccessMultipleTags(RFID_HANDLE32);
 
+void HandleResult(RFID_HANDLE32 readerHandle, RFID_STATUS rfidStatus);
+
 void * ProcessRfidEventsThread(void * pvarg);
 void * AwaitRfidWin32EventsThread(void * pvarg);
 
@@ -44,8 +41,4 @@ tm SYSTEMTIME2tm(SYSTEMTIME *s);
 void GetLocalTime(SYSTEMTIME * pSystemTime);
 void clean_stdin(void);
 
-#ifdef linux
 #define rfid_swprintf swprintf
-#else
-#define rfid_swprintf(x, y, z, ...) swprintf(x, z, __VA_ARGS__)
-#endif

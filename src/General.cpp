@@ -1401,6 +1401,7 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 		rfid_swprintf(pTagReportData, (260-index), L"%02X", pTagID[index]);
 		while(*pTagReportData) pTagReportData++;
 	}
+	//wprintf(L"ID:%S\n", tagBuffer);
 
 	if(pTagData->lpLocation)
 	{
@@ -1436,6 +1437,7 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 		break;
 	}
 
+	//wprintf(L"op code: %d\n", pTagData->opCode);
 	if(pTagData->opCode != ACCESS_OPERATION_NONE)
 		switch(pTagData->opCode)
 	{
@@ -1522,6 +1524,7 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 			break;
 		}
 
+		
 		wchar_t* pTagReportData = accessMBBuffer;
 		for(index = 0; index < pTagData->memoryBankDataLength; index++)
 		{
@@ -1531,13 +1534,15 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 			}
 			rfid_swprintf(pTagReportData, 128, L"%02X", pTagMBData[index]);
 			while(*pTagReportData) pTagReportData++;
+			
 		}
-	}	
+	}
+
 	rfid_swprintf(resultBuffer, 2048, L"%2d/%2d/%2d %02d:%02d:%2d:%03d\t%ls\tAntenna:%2d\tPC:%5x\tXPC:%5x\tRSSI:%04d\t%ls %ls %ls %ls %ls\n",
 		localTime.wDay, localTime.wMonth, localTime.wYear, localTime.wHour, localTime.wMinute, localTime.wSecond, localTime.wMilliseconds,
 		tagEventBuffer, pTagData->antennaID, pTagData->PC,
 		pTagData->XPC, pTagData->peakRSSI, tagBuffer,AccessResultBuffer, memoryBankBuffer, accessMBBuffer, tagLocationBuffer);
-	wprintf(L"%ls", resultBuffer);
+	//wprintf(L"%ls", resultBuffer);
 }
 #ifdef linux
 tm SYSTEMTIME2tm(SYSTEMTIME *s)
