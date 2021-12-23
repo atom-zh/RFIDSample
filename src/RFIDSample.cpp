@@ -3,8 +3,6 @@
 
 #include "General.h"
 
-bool g_bUseWin32EventHandling = false;
-
 
 static wchar_t hostName[260];
 static int readerPort = 0;
@@ -18,10 +16,14 @@ void InventoryMenu(RFID_HANDLE32 readerHandle);
 void AccessMenu(RFID_HANDLE32 readerHandle);
 
 //RFID_STATUS ConnectReader(RFID_HANDLE32 *readerHandle,wchar_t *hostName,int readerPort);
-int sa_device_rfid_open(char *hostname, int port)
+int sa_device_rfid_open(char *host, int port)
 {
 	RFID_HANDLE32 readerHandle;
-	RFID_STATUS rfidStatus = ConnectReader(&readerHandle, hostName, port);
+	RFID_STATUS rfidStatus;
+
+	mbstowcs(hostName, host, 32);
+	wprintf(L"host: %S, port: %d\n", hostName, port);
+	rfidStatus = ConnectReader(&readerHandle, hostName, port);
 	if (RFID_API_SUCCESS == rfidStatus) {
 		TAG_STORAGE_SETTINGS tagStorageSettings;
 
@@ -31,7 +33,7 @@ int sa_device_rfid_open(char *hostname, int port)
 
 		CreateEventThread(readerHandle);
 	} else {
-		wprintf(L"Failed to connect RFID\nd");
+		wprintf(L"\nFailed to connect RFID\n");
 		return -1;
 	}
 	return 0;
@@ -55,6 +57,8 @@ int sa_device_rfid_register(void)
 int main(int argc, char* argv[])
 {
 	int option = 0;
+	char host[32] = "169.254.78.149";
+	int port = 5084;
 	while(1) {
 		wprintf(L"\n");
 		wprintf(L"\n----Command Menu----");
@@ -62,7 +66,7 @@ int main(int argc, char* argv[])
 		wprintf(L"\n2. rfid_close");
 		wprintf(L"\n3. rfid_read");
 		wprintf(L"\n4. rfid_regist");
-		wprintf(L"\n5. exit");
+		wprintf(L"\n5. exit\n");
 
 		while(1 != scanf("%d", &option))
 		{
@@ -71,7 +75,7 @@ int main(int argc, char* argv[])
 		}
 		switch(option) {
 			case 1:
-				sa_device_rfid_open("169.254.78.149", 5084);
+				sa_device_rfid_open(host, port);
 				break;
 			case 2:
 				sa_device_rfid_close();
@@ -82,6 +86,8 @@ int main(int argc, char* argv[])
 			case 4:
 				sa_device_rfid_register();
 				break;
+			case 5:
+				exit(0);
 			default:
 				wprintf(L"\nInvalid case:");
 			break;
@@ -103,7 +109,6 @@ int b_main(int argc, char* argv[])
 		}
 		else
 		{
-			g_bUseWin32EventHandling = false; // in lunux, just the callback mechanism is supported.
 			char *stopChar;
 			mbstowcs((wchar_t *)hostName, argv[1], MAX_PATH);
 			readerPort = strtol(argv[2], &stopChar, 10);
@@ -117,6 +122,7 @@ int b_main(int argc, char* argv[])
 	}
 
 	RFID_HANDLE32 readerHandle;
+	wprintf(L"host: %S, port: %d\n", (wchar_t *)hostName, readerPort);
 	RFID_STATUS rfidStatus = ConnectReader(&readerHandle, hostName, readerPort);
 	if(RFID_API_SUCCESS == rfidStatus)
 	{

@@ -334,13 +334,8 @@ void * ProcessRfidEventsThread(void * pvarg)
 void CreateEventThread(RFID_HANDLE32 readerHandle)
 {
 
-	if(g_bUseWin32EventHandling)
-	{
-	}
-	else
-	{
-		HandleResult(readerHandle, RFID_RegisterEventNotificationCallback(readerHandle, g_RfidEventTypes,  MAX_EVENTS, (RfidEventCallbackFunction) rfidEventCallback, NULL, NULL));
-	}
+
+	HandleResult(readerHandle, RFID_RegisterEventNotificationCallback(readerHandle, g_RfidEventTypes,  MAX_EVENTS, (RfidEventCallbackFunction) rfidEventCallback, NULL, NULL));
 
 	readerEventAwaitingThreadHandle  = new pthread_t;
 	sem_init(&RfidEventSemaphore, 0, 0);
