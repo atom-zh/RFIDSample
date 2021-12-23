@@ -96,17 +96,6 @@ CONFIG					:=linux64_clean
 PLATFORM				:=linux64
 endif
 
-
-ifeq ($(OS),Windows_NT)
-sep					:=\\
-MKDIR				:=mkdir
-COPY				:=copy
-COPYDIR				:=xcopy /s /y /E
-RM					:=cs-rm -f
-RMDIR				:=$(RM) -r -d 
-COMMANDSEPARATOR	:= &
-TAR					:=..\build-tools\\bsdtar\\bin\\bsdtar.exe
-else
 sep					:=/
 MKDIR				:=mkdir -p
 COPY				:=cp
@@ -117,7 +106,7 @@ COMMANDSEPARATOR	:= ;
 TAR					:=tar
 SH                  :=/bin/sh
 CHANGEDIR			:=cd
-endif
+
 
 ifeq ($(PLATFORM),linux)
 TARGET				:=

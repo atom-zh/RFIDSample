@@ -225,7 +225,7 @@ void HandleRfidEvent(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 		break;
 	case TAG_READ_EVENT:
 		{
-			wprintf(L"TAG_READ_EVENT.");
+			wprintf(L"TAG_READ_EVENT\n");
 			pTagData = RFID_AllocateTag(readerHandle);
 			if(NULL == pTagData)
 			{
@@ -238,6 +238,8 @@ void HandleRfidEvent(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 			{
 				printTagDataWithResults(pTagData);
 			}
+			wprintf(L"TAG_READ_EVENT over----------\n");
+			wprintf(L"\n");
 		}
 		break;
 	case BUFFER_FULL_EVENT:
@@ -572,9 +574,7 @@ RFID_STATUS SimpleInventory(RFID_HANDLE32 readerHandle)
 
 	wprintf(L"Waiting for sometime so that some tags are reported from the Reader");
 
-	//while(1){
-		//sleep(1);
-	//}
+	sleep(10);
 
 	rfidStatus = RFID_StopInventory(readerHandle);
 	HandleResult(readerHandle, rfidStatus);

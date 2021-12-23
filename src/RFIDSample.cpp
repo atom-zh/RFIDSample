@@ -17,7 +17,82 @@ void ConfigurationMenu(RFID_HANDLE32 readerHandle);
 void InventoryMenu(RFID_HANDLE32 readerHandle);
 void AccessMenu(RFID_HANDLE32 readerHandle);
 
+//RFID_STATUS ConnectReader(RFID_HANDLE32 *readerHandle,wchar_t *hostName,int readerPort);
+int sa_device_rfid_open(char *hostname, int port)
+{
+	RFID_HANDLE32 readerHandle;
+	RFID_STATUS rfidStatus = ConnectReader(&readerHandle, hostName, port);
+	if (RFID_API_SUCCESS == rfidStatus) {
+		TAG_STORAGE_SETTINGS tagStorageSettings;
+
+		RFID_GetTagStorageSettings(readerHandle, &tagStorageSettings);
+		tagStorageSettings.discardTagsOnInventoryStop = TRUE;
+		RFID_SetTagStorageSettings(readerHandle, &tagStorageSettings);
+
+		CreateEventThread(readerHandle);
+	} else {
+		wprintf(L"Failed to connect RFID\nd");
+		return -1;
+	}
+	return 0;
+}
+
+int sa_device_rfid_close(void)
+{
+
+}
+
+int sa_device_rfid_read(void)
+{
+
+}
+
+int sa_device_rfid_register(void)
+{
+
+}
+
 int main(int argc, char* argv[])
+{
+	int option = 0;
+	while(1) {
+		wprintf(L"\n");
+		wprintf(L"\n----Command Menu----");
+		wprintf(L"\n1. rfid_open");
+		wprintf(L"\n2. rfid_close");
+		wprintf(L"\n3. rfid_read");
+		wprintf(L"\n4. rfid_regist");
+		wprintf(L"\n5. exit");
+
+		while(1 != scanf("%d", &option))
+		{
+			wprintf(L"\nEnter a Valid Input:");
+			clean_stdin();
+		}
+		switch(option) {
+			case 1:
+				sa_device_rfid_open("169.254.78.149", 5084);
+				break;
+			case 2:
+				sa_device_rfid_close();
+				break;
+			case 3:
+				sa_device_rfid_read();
+				break;
+			case 4:
+				sa_device_rfid_register();
+				break;
+			default:
+				wprintf(L"\nInvalid case:");
+			break;
+		}
+		
+	}
+	return 0;
+}
+
+
+int b_main(int argc, char* argv[])
 {
 	if(argc == 1 || argc == 3)
 	{
@@ -42,20 +117,21 @@ int main(int argc, char* argv[])
 	}
 
 	RFID_HANDLE32 readerHandle;
-	RFID_STATUS rfidStatus = ConnectReader(&readerHandle,hostName,readerPort);
+	RFID_STATUS rfidStatus = ConnectReader(&readerHandle, hostName, readerPort);
 	if(RFID_API_SUCCESS == rfidStatus)
 	{
 		TAG_STORAGE_SETTINGS tagStorageSettings;	
 
-		RFID_GetTagStorageSettings(readerHandle,&tagStorageSettings);
+		RFID_GetTagStorageSettings(readerHandle, &tagStorageSettings);
 		tagStorageSettings.discardTagsOnInventoryStop = TRUE;
-		RFID_SetTagStorageSettings(readerHandle,&tagStorageSettings);
+		RFID_SetTagStorageSettings(readerHandle, &tagStorageSettings);
 
 		CreateEventThread(readerHandle);
 		Createmenu(readerHandle);
 	}
 	return 0;
 }
+
 
 void Createmenu(RFID_HANDLE32 readerHandle)
 {
@@ -69,7 +145,8 @@ void Createmenu(RFID_HANDLE32 readerHandle)
 		wprintf(L"\n2. Configuration");
 		wprintf(L"\n3. Inventory");
 		wprintf(L"\n4. Access  - Select Mode of Access");
-		wprintf(L"\n5. Exit\n");
+		wprintf(L"\n5. Access  - Select Mode of Access");
+		wprintf(L"\n6. Exit\n");
 		while(1 != scanf("%d",&option))
 		{
 			wprintf(L"\nEnter a Valid Input:");

@@ -15,7 +15,7 @@ endif
 
 
 ### Edit this section for a new project : start #####
-PRJNAME					:=rfidsample4
+PRJNAME					:=rfidsample
 BUILDDIR				:=
 OSBUILDDIR				:=
 ### Edit this section for a new project : end #####
@@ -26,7 +26,7 @@ OSPROJOUTDIR			:=$(OSBUILDDIR)$(GLOBALOUTDIR)$(sep)$(CONFIG)
 OUTDIR					:=$(PLATFORMOUTDIR)/$(CONFIG)
 SRCDIR					:=src
 ##INCPLATFORMDIR				:=../../../../Platform
-INCROOTDIR				:=../../../../
+INCROOTDIR				:=../
 OUTPUTFILENAME			:=$(PRJNAME).elf
 OUTPUTFILE				:=$(OUTDIR)/$(OUTPUTFILENAME)
 PROJECTFLAGS			:=-DUNICODE -Dlinux
