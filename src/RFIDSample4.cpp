@@ -17,11 +17,7 @@ void ConfigurationMenu(RFID_HANDLE32 readerHandle);
 void InventoryMenu(RFID_HANDLE32 readerHandle);
 void AccessMenu(RFID_HANDLE32 readerHandle);
 
-#ifdef linux
 int main(int argc, char* argv[])
-#else
-int _tmain(int argc, wchar_t* argv[])
-#endif
 {
 	if(argc == 1 || argc == 3)
 	{
@@ -32,17 +28,10 @@ int _tmain(int argc, wchar_t* argv[])
 		}
 		else
 		{
-#ifdef linux
 			g_bUseWin32EventHandling = false; // in lunux, just the callback mechanism is supported.
 			char *stopChar;
 			mbstowcs((wchar_t *)hostName, argv[1], MAX_PATH);
 			readerPort = strtol(argv[2], &stopChar, 10);
-#else
-			wchar_t *stopChar;
-			wcscpy((wchar_t *)hostName, argv[1]);
-			readerPort = wcstol(argv[2], &stopChar, 10);
-			g_bUseWin32EventHandling = true; // you can set it to true or false in windows, it supports both.
-#endif
 		}	
 	}
 	else
@@ -168,7 +157,6 @@ void ConfigurationMenu(RFID_HANDLE32 readerHandle)
 
 void InventoryMenu(RFID_HANDLE32 readerHandle)
 {
-	
 	while(1)
 	{
 		int option = 0;
@@ -183,7 +171,7 @@ void InventoryMenu(RFID_HANDLE32 readerHandle)
 			wprintf(L"\nEnter a Valid Input:");
 			clean_stdin();
 		}
-			
+
 		switch(option)
 		{
 		case 1:
@@ -199,7 +187,6 @@ void InventoryMenu(RFID_HANDLE32 readerHandle)
 			return;
 		}
 	}
-	
 }
 void AccessMenu(RFID_HANDLE32 readerHandle)
 {
@@ -257,7 +244,6 @@ void InventoryFilterOption(RFID_HANDLE32 readerHandle)
 			break;
 		case 3:
 			return;
-			
 		}
 		if(rfidStatus != RFID_API_SUCCESS)
 		{
@@ -266,8 +252,6 @@ void InventoryFilterOption(RFID_HANDLE32 readerHandle)
 			wprintf(L"Operation failed . Reason : %ls",ErrorInfo.statusDesc);
 		}
 	}
-	
-	
 }
 
 

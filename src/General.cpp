@@ -10,15 +10,9 @@ void rfidEventCallback(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType);
 pthread_mutex_t RfidEventLock = PTHREAD_MUTEX_INITIALIZER;
 
 BOOLEAN stopTesting = FALSE;
-#ifndef linux
-#define MAX_SEM_COUNT 1
-#define THREADCOUNT 12
-HANDLE readerEventAwaitingThreadHandle;
-HANDLE InventoryStartSemaphore, InventoryCompleteSemaphore, AccessCompleteSemaphore, RfidEventSemaphore;
-#else
 pthread_t * readerEventAwaitingThreadHandle;
 sem_t InventoryStartSemaphore, InventoryCompleteSemaphore, AccessCompleteSemaphore, RfidEventSemaphore;
-#endif
+
 std::list<RFID_EVENT_TYPE> rfidEventList;
 
 
@@ -39,9 +33,6 @@ ANTENNA_INFO g_antennaInfo;
 extern bool g_bUseWin32EventHandling;
 
 // The code will use one or the other of these following : Event Handles for win32 events or Event types for the callbacks
-#ifndef linux
-HANDLE g_RfidWin32EventHandles[MAX_EVENTS];
-#endif
 RFID_EVENT_TYPE g_RfidEventTypes[MAX_EVENTS] = 
 {
 	GPI_EVENT, TAG_READ_EVENT, BUFFER_FULL_EVENT, BUFFER_FULL_WARNING_EVENT, 
@@ -81,7 +72,6 @@ RFID_STATUS  ConnectReader(RFID_HANDLE32 *readerHandle, wchar_t *hostName, int r
 	HandleResult(*readerHandle, rfidStatus);
 	return rfidStatus;
 }
-
 
 RFID_STATUS ReaderCapability(RFID_HANDLE32 readerHandle)
 {
@@ -209,11 +199,7 @@ void rfidEventCallback(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 	pthread_mutex_lock(&RfidEventLock);
 	rfidEventList.push_back(eventType);
 	pthread_mutex_unlock(&RfidEventLock);
-#ifndef linux
-	ReleaseSemaphore(RfidEventSemaphore, 1, NULL);
-#else
 	sem_post(&RfidEventSemaphore);
-#endif
 }
 
 void HandleRfidEvent(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
@@ -239,6 +225,7 @@ void HandleRfidEvent(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 		break;
 	case TAG_READ_EVENT:
 		{
+			wprintf(L"TAG_READ_EVENT.");
 			pTagData = RFID_AllocateTag(readerHandle);
 			if(NULL == pTagData)
 			{
@@ -300,31 +287,19 @@ void HandleRfidEvent(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 		wprintf(L"\nQuit the Application and Restart..");
 		break;
 	case INVENTORY_START_EVENT:
-		wprintf(L"\nSIGNALLED: INVENTORY_START_EVENT");
-#ifndef linux
-		ReleaseSemaphore(InventoryStartSemaphore, 1, NULL);
-#else
+		wprintf(L"\nSIGNALLED: INVENTORY_START_EVENT\n");
 		sem_post(&InventoryStartSemaphore);
-#endif
 		break;
 	case INVENTORY_STOP_EVENT:
 		wprintf(L"\nSIGNALLED: INVENTORY_STOP_EVENT");
-#ifndef linux
-		ReleaseSemaphore(InventoryCompleteSemaphore, 1, NULL);
-#else
 		sem_post(&InventoryCompleteSemaphore);
-#endif
 		break;
 	case ACCESS_START_EVENT:
 		wprintf(L"\nSIGNALLED: ACCESS_START_EVENT");
 		break;
 	case ACCESS_STOP_EVENT:
 		wprintf(L"\nSIGNALLED: ACCESS_STOP_EVENT");
-#ifndef linux
-		ReleaseSemaphore(AccessCompleteSemaphore, 1, NULL);
-#else
 		sem_post(&AccessCompleteSemaphore);
-#endif
 		break;
 	default:
 		wprintf(L"\nUnknown/Unhandled event %d signalled", eventType);
@@ -340,11 +315,8 @@ void * ProcessRfidEventsThread(void * pvarg)
 	RFID_EVENT_TYPE eventType;
 	while(!stopTesting)
 	{
-#ifndef linux
-		WaitForSingleObject(RfidEventSemaphore, INFINITE);
-#else
 		sem_wait(&RfidEventSemaphore);
-#endif
+
 		while(!stopTesting && !rfidEventList.empty())
 		{
 			pthread_mutex_lock(&RfidEventLock);
@@ -357,80 +329,23 @@ void * ProcessRfidEventsThread(void * pvarg)
 	return NULL;
 }
 
-#ifndef linux
-// win32 based event handling works only on windows
-void * AwaitRfidWin32EventsThread(void * pvarg)
-{
-	while(!stopTesting)
-	{
-		DWORD dwStatus = WaitForMultipleObjects(MAX_EVENTS, g_RfidWin32EventHandles, FALSE, INFINITE);
-		if(dwStatus >= WAIT_OBJECT_0 && dwStatus <= WAIT_OBJECT_0 + MAX_EVENTS)
-		{
-			rfidEventList.push_back((RFID_EVENT_TYPE)dwStatus);
-			ReleaseSemaphore(RfidEventSemaphore, 1, NULL);
-		}
-	}
-	return NULL;
-}
-#endif
-
 void CreateEventThread(RFID_HANDLE32 readerHandle)
 {
-#ifndef linux
-	DWORD dwThreadID = 0;
-#endif
+
 	if(g_bUseWin32EventHandling)
 	{
-#ifndef linux
-		g_RfidWin32EventHandles[GPI_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[TAG_READ_EVENT] = CreateEvent(NULL, TRUE, FALSE, NULL);
-		g_RfidWin32EventHandles[BUFFER_FULL_WARNING_EVENT] = CreateEvent(NULL, TRUE, FALSE, NULL);
-		g_RfidWin32EventHandles[ANTENNA_EVENT] = CreateEvent(NULL, TRUE, FALSE, NULL);
-		g_RfidWin32EventHandles[INVENTORY_START_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[INVENTORY_STOP_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[ACCESS_START_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[ACCESS_STOP_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[DISCONNECTION_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[BUFFER_FULL_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-		g_RfidWin32EventHandles[NXP_EAS_ALARM_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);		
-		g_RfidWin32EventHandles[READER_EXCEPTION_EVENT] = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, GPI_EVENT, g_RfidWin32EventHandles[GPI_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, TAG_READ_EVENT, g_RfidWin32EventHandles[TAG_READ_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, BUFFER_FULL_WARNING_EVENT, g_RfidWin32EventHandles[BUFFER_FULL_WARNING_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, BUFFER_FULL_EVENT, g_RfidWin32EventHandles[BUFFER_FULL_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, ANTENNA_EVENT, g_RfidWin32EventHandles[ANTENNA_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, INVENTORY_START_EVENT, g_RfidWin32EventHandles[INVENTORY_START_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, INVENTORY_STOP_EVENT, g_RfidWin32EventHandles[INVENTORY_STOP_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, ACCESS_START_EVENT, g_RfidWin32EventHandles[ACCESS_START_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, ACCESS_STOP_EVENT, g_RfidWin32EventHandles[ACCESS_STOP_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, DISCONNECTION_EVENT, g_RfidWin32EventHandles[DISCONNECTION_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, READER_EXCEPTION_EVENT, g_RfidWin32EventHandles[READER_EXCEPTION_EVENT]));
-		HandleResult(readerHandle, RFID_RegisterEventNotification(readerHandle, NXP_EAS_ALARM_EVENT, g_RfidWin32EventHandles[NXP_EAS_ALARM_EVENT]));
-
-
-		// we need a thread that waits on all these events.
-		readerEventAwaitingThreadHandle = CreateThread(NULL, 0, (unsigned long (WINAPI *)(void *))AwaitRfidWin32EventsThread,  (void *)readerHandle, 0, &dwThreadID);
-#endif
 	}
 	else
 	{
 		HandleResult(readerHandle, RFID_RegisterEventNotificationCallback(readerHandle, g_RfidEventTypes,  MAX_EVENTS, (RfidEventCallbackFunction) rfidEventCallback, NULL, NULL));
 	}
-#ifndef linux
-	RfidEventSemaphore = CreateSemaphore( NULL, 0, MAX_SEM_COUNT, NULL);    
-	InventoryStartSemaphore = CreateSemaphore( NULL, 0, MAX_SEM_COUNT, NULL);    
-	InventoryCompleteSemaphore = CreateSemaphore( NULL, 0, MAX_SEM_COUNT, NULL);    
-	AccessCompleteSemaphore = CreateSemaphore( NULL, 0, MAX_SEM_COUNT, NULL);
-	readerEventAwaitingThreadHandle = CreateThread(NULL, 0, (unsigned long (WINAPI *)(void *))ProcessRfidEventsThread,  (void *)readerHandle, 0, &dwThreadID);
-#else
+
 	readerEventAwaitingThreadHandle  = new pthread_t;
 	sem_init(&RfidEventSemaphore, 0, 0);
 	sem_init(&InventoryStartSemaphore, 0, 0);
 	sem_init(&InventoryCompleteSemaphore, 0, 0);
 	sem_init(&AccessCompleteSemaphore, 0, 0);
 	pthread_create(readerEventAwaitingThreadHandle, NULL, ProcessRfidEventsThread, (void *)(readerHandle));
-#endif
 }
 
 void KillEventThread()
@@ -438,15 +353,7 @@ void KillEventThread()
 	wprintf(L"\nKilling Threads.. ");
 	stopTesting = TRUE;
 	// Release allocated resources
-#ifndef linux
-	ReleaseSemaphore(RfidEventSemaphore, 1, NULL);
-	WaitForSingleObject(readerEventAwaitingThreadHandle, INFINITE);
-	CloseHandle(readerEventAwaitingThreadHandle);
-	CloseHandle(RfidEventSemaphore);
-	CloseHandle(InventoryStartSemaphore);
-	CloseHandle(AccessCompleteSemaphore);
-	CloseHandle(AccessCompleteSemaphore);
-#else
+
 	sem_post(&RfidEventSemaphore);
 	pthread_join(*readerEventAwaitingThreadHandle, NULL );
 	delete readerEventAwaitingThreadHandle;
@@ -454,8 +361,7 @@ void KillEventThread()
 	sem_destroy(&InventoryStartSemaphore);
 	sem_destroy(&InventoryCompleteSemaphore);
 	sem_destroy(&AccessCompleteSemaphore);
-	
-#endif
+
 	wprintf(L"Killing Threads.. Done");
 	readerEventAwaitingThreadHandle = NULL;
 }
@@ -665,11 +571,11 @@ RFID_STATUS SimpleInventory(RFID_HANDLE32 readerHandle)
 	}
 
 	wprintf(L"Waiting for sometime so that some tags are reported from the Reader");
-#ifdef linux
-	sleep(1);
-#else
-	Sleep(1000);
-#endif
+
+	//while(1){
+		//sleep(1);
+	//}
+
 	rfidStatus = RFID_StopInventory(readerHandle);
 	HandleResult(readerHandle, rfidStatus);
 	return rfidStatus;
@@ -704,19 +610,13 @@ RFID_STATUS PeriodicInventory(RFID_HANDLE32 readerHandle)
 		wprintf(L"\nPeriodic Inventory starting in 2 seconds");
 		for(int nIndex = 0; nIndex < 2; nIndex++)
 		{
-#ifndef linux
-			if(WAIT_OBJECT_0 == WaitForSingleObject(InventoryStartSemaphore, INFINITE))
-#else
+
 			sem_wait(&InventoryStartSemaphore);
-#endif
 			{
 				wprintf(L"\nInventory successfully started");
 			}
-#ifndef linux
-			if(WAIT_OBJECT_0 == WaitForSingleObject(InventoryCompleteSemaphore, INFINITE))
-#else
+
 			sem_wait(&InventoryCompleteSemaphore);
-#endif
 			{
 				wprintf(L"\nInventory successfully stopped");
 			}
@@ -1310,11 +1210,8 @@ RFID_STATUS ReadAccessMultipleTags(RFID_HANDLE32  readerHandle)
 	rfidStatus = RFID_Read(readerHandle, NULL, 0, &readAccessParams, &accessFilter,&g_antennaInfo, pTagData, NULL);
 	if(rfidStatus == RFID_API_SUCCESS)
 	{
-#ifndef linux
-		if(WAIT_OBJECT_0 == WaitForSingleObject(AccessCompleteSemaphore, INFINITE))
-#else
 		sem_wait(&AccessCompleteSemaphore);
-#endif
+
 		while(RFID_API_SUCCESS == RFID_GetReadTag(readerHandle, pTagData))
 		{
 			printTagDataWithResults(pTagData);
@@ -1381,11 +1278,7 @@ RFID_STATUS WriteAccessMultipleTags(RFID_HANDLE32  readerHandle)
 
 	if(rfidStatus == RFID_API_SUCCESS)
 	{
-#ifndef linux
-		if(WAIT_OBJECT_0 == WaitForSingleObject(AccessCompleteSemaphore, INFINITE))
-#else
 		sem_wait(&AccessCompleteSemaphore);
-#endif
 		accessSuccessCount = accessFailureCount = 0;
 		RFID_GetLastAccessResult(readerHandle, &accessSuccessCount, &accessFailureCount);
 		wprintf(L"\n Write succeeded on %d tags and failed on %d tags ",accessSuccessCount,accessFailureCount);
@@ -1438,11 +1331,7 @@ RFID_STATUS LockAccessMultipleTags(RFID_HANDLE32  readerHandle)
 	}
 	rfidStatus = RFID_Lock(readerHandle, pTagID, tagIDLength, &lockAccessParams, &accessFilter, &g_antennaInfo, NULL);	
 	accessSuccessCount = accessFailureCount = 0;
-#ifndef linux
-	if(WAIT_OBJECT_0 == WaitForSingleObject(AccessCompleteSemaphore, INFINITE))
-#else
 	sem_wait(&AccessCompleteSemaphore);
-#endif
 	RFID_GetLastAccessResult(readerHandle, &accessSuccessCount, &accessFailureCount);
 	if(accessSuccessCount> 0  && rfidStatus == RFID_API_SUCCESS)
 	{
@@ -1475,11 +1364,9 @@ RFID_STATUS KillAccessMultipleTags(RFID_HANDLE32 readerHandle)
 
 	accessSuccessCount = 0;
 	accessFailureCount = 0;
-#ifndef linux
-	if(WAIT_OBJECT_0 == WaitForSingleObject(AccessCompleteSemaphore, INFINITE))
-#else
+
 	sem_wait(&AccessCompleteSemaphore);
-#endif
+
 	RFID_GetLastAccessResult(readerHandle, &accessSuccessCount, &accessFailureCount);
 	if(accessSuccessCount>0 && rfidStatus == RFID_API_SUCCESS)
 	{
@@ -1497,9 +1384,7 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 	UINT8*pTagID = pTagData->pTagID;
 	UINT8*pTagMBData = pTagData->pMemoryBankData;
 	UINT32 epcLength =  pTagData->tagIDLength;
-#ifdef WIN32
-	TIME_ZONE_INFORMATION tzInfo;
-#endif
+
 	SYSTEMTIME localTime;
 
 	wchar_t  memoryBankBuffer[128] = {0,};
@@ -1511,9 +1396,7 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 	wchar_t tagBuffer[260] = {0,};
 	wchar_t* pTagReportData = tagBuffer;
 	unsigned int   index = 0;
-#ifndef linux
-	GetTimeZoneInformation(&tzInfo);
-#endif
+
 	for(index = 0; index < epcLength; index++)
 	{
 		if(0 < index && index%2 == 0)
@@ -1531,19 +1414,11 @@ void printTagDataWithResults(TAG_DATA *pTagData)
 
 	if(pTagData->tagEvent == NONE)
 	{
-#if !WINCE && !linux
-		SystemTimeToTzSpecificLocalTime(&tzInfo, &pTagData->seenTime.utcTime.firstSeenTimeStamp, &localTime);
-#else
 		memcpy(&localTime, &pTagData->seenTime.utcTime.firstSeenTimeStamp, sizeof(SYSTEMTIME));
-#endif
 	}
 	else
 	{
-#if !WINCE && !linux
-		SystemTimeToTzSpecificLocalTime(&tzInfo, &pTagData->tagEventTimeStamp, &localTime);
-#else
 		memcpy(&localTime, &pTagData->tagEventTimeStamp, sizeof(SYSTEMTIME));
-#endif
 	}
 
 	switch(pTagData->tagEvent)
