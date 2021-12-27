@@ -1,18 +1,18 @@
 bin/linux64_release//General.d: src//General.cpp src//General.h \
- src//stdafx.h ..//include/rfidapi.h ..//include/rfidapiTypes.h \
- ..//include/rfidapiConstants.h ..//include/rfidapiStructs.h \
- ..//include/rfidapiErrors.h
+ src//stdafx.h include/rfidapi.h include/rfidapiTypes.h \
+ include/rfidapiConstants.h include/rfidapiStructs.h \
+ include/rfidapiErrors.h
 
 src//General.h:
 
 src//stdafx.h:
 
-..//include/rfidapi.h:
+include/rfidapi.h:
 
-..//include/rfidapiTypes.h:
+include/rfidapiTypes.h:
 
-..//include/rfidapiConstants.h:
+include/rfidapiConstants.h:
 
-..//include/rfidapiStructs.h:
+include/rfidapiStructs.h:
 
-..//include/rfidapiErrors.h:
+include/rfidapiErrors.h:
