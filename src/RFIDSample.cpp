@@ -4,10 +4,17 @@
 #include "General.h"
 #include "sa_rfid.h"
 
+typedef  struct _SINGLE_TAG_ACCESS_INFO
+{
+	UINT8  epcID[64];
+	UINT32 epcIDLength;
+}SINGLE_TAG_ACCESS_INFO;
+
 static wchar_t hostName[260];
 static int readerPort = 0;
 static SINGULATION_CONTROL singulationControl;
 extern ANTENNA_INFO g_antennaInfo;
+static SINGLE_TAG_ACCESS_INFO singleTagAccessInfo;
 
 void InventoryFilterOption(RFID_HANDLE32 readerHandle);
 void Createmenu(RFID_HANDLE32 readerHandle);
@@ -29,7 +36,6 @@ struct sa_rfid_tag_data {
 };
 
 RFID_HANDLE32 readerHandle;
-//RFID_STATUS ConnectReader(RFID_HANDLE32 *readerHandle,wchar_t *hostName,int readerPort);
 int sa_device_rfid_open(char *host, int port)
 {
 
@@ -45,6 +51,7 @@ int sa_device_rfid_open(char *host, int port)
 		RFID_SetTagStorageSettings(readerHandle, &tagStorageSettings);
 
 		//CreateEventThread(readerHandle);
+		wprintf(L"\nSuccessful connect RFID\n");
 	} else {
 		wprintf(L"\nFailed to connect RFID\n");
 		return -1;
@@ -110,6 +117,53 @@ int sa_device_rfid_read(struct sa_rfid_tag_data *tag_data)
 	return 0;
 }
 
+#if 0
+int sa_device_rfid_write(WRITE_ACCESS_PARAMS writeAccessParams)
+{
+	RFID_STATUS rfidStatus = RFID_API_SUCCESS;
+
+	UINT32 accessSuccessCount = 0;
+	UINT32 accessFailureCount = 0;		
+	UINT8* pTagID;
+	UINT32 tagIDLength;
+	LPACCESS_FILTER lpAccessFilter;
+	//WRITE_ACCESS_PARAMS writeAccessParams;
+	UINT8 writeData[64];
+
+	writeAccessParams.pWriteData = writeData ;
+	char pBytes[256]; 
+	char *pBuf; 
+	UINT16 temp = 0;
+	char AccessPassword[10];
+	memset(AccessPassword, 0, 10);
+
+	memset(writeAccessParams.pWriteData, 0,64);
+	memset(AccessPassword, 0, 10);
+
+	pTagID = singleTagAccessInfo.epcID;
+	tagIDLength = singleTagAccessInfo.epcIDLength;
+	lpAccessFilter = NULL;
+
+	rfidStatus = RFID_Write(readerHandle, pTagID, tagIDLength, &writeAccessParams, lpAccessFilter, NULL, NULL);	
+	accessSuccessCount = accessFailureCount = 0;
+	ERROR_INFO errorInfo;
+	if(RFID_API_SUCCESS!= rfidStatus)
+	{
+		rfidStatus = RFID_GetLastErrorInfo(readerHandle, &errorInfo);
+	}
+	RFID_GetLastAccessResult(readerHandle, 
+		&accessSuccessCount, 
+		&accessFailureCount);
+	if(RFID_API_SUCCESS == rfidStatus &&  1 == accessSuccessCount && 0 == accessFailureCount)
+	{
+		rfidStatus = RFID_API_SUCCESS;
+		wprintf(L"\nWrite Operation done successfully..");
+	}
+	HandleResult(readerHandle, rfidStatus);
+	return 0;
+}
+#endif
+
 #define MAX_EVENTS 12
 // The code will use one or the other of these following : Event Handles for win32 events or Event types for the callbacks
 sa_rfid_evt rfid_event_types[MAX_EVENTS] = 
@@ -132,7 +186,16 @@ struct sa_rfid_event_cb event_cb = {0};
 
 int sa_rfid_read_event_handler(sa_rfid_evt, struct sa_rfid_tag_data *tag_data)
 {
-	wprintf(L"num:%d\tID:%s\tRSSI:%04d\n", tag_data->num, tag_data->id, tag_data->rssi);
+	static int seq = 0;
+	char vin[18];
+	char cmd[128];
+
+	wprintf(L"seq:%08d\tnum:%d\tID:%s\tRSSI:%04d\n", seq, tag_data->num, tag_data->id, tag_data->rssi);
+	snprintf(vin, 18, tag_data->id);
+	sprintf(cmd, "echo %s > /platform_data/misc/events/rfid", vin);
+	wprintf(L"cmd: %s\n", cmd);
+	system(cmd);
+	seq++;
 	return 0;
 }
 
@@ -170,6 +233,7 @@ static void rfid_event_cb(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 		default:
 			break;
 	}
+	sleep(1);
 }
 
 int sa_device_register_rfid_cb(sa_rfid_evt event_type, sa_rfid_evt_hdlr cb)
@@ -203,14 +267,27 @@ int main(int argc, char* argv[])
 	int option = 0;
 	char host[32] = "169.254.78.149";
 	int port = 5084;
+	WRITE_ACCESS_PARAMS writeAccessParams;
+
 	while(1) {
+		if (sa_device_rfid_open(host, port) < 0) {
+			sleep(2);
+			wprintf(L"Try again\n");
+			continue;
+		} else {
+			break;
+		}
+	}
+	while(1) {
+
 		wprintf(L"\n");
 		wprintf(L"\n----Command Menu----");
 		wprintf(L"\n1. rfid_open");
 		wprintf(L"\n2. rfid_close");
 		wprintf(L"\n3. rfid_read");
-		wprintf(L"\n4. rfid_regist");
-		wprintf(L"\n5. exit\n");
+		wprintf(L"\n4. rfid_wirte");
+		wprintf(L"\n5. rfid_regist");
+		wprintf(L"\n6. exit\n");
 
 		while(1 != scanf("%d", &option))
 		{
@@ -231,11 +308,15 @@ int main(int argc, char* argv[])
 				wprintf(L"Test ID:%s, RSSI:%04d\n", tag_data.id, tag_data.rssi);
 				break;
 			case 4:
+				WriteAccessSingleTag(readerHandle);
+				break;
+			case 5:
 				sa_device_register_rfid_cb(TAG_READ_EVENT, sa_rfid_read_event_handler);
 				sa_device_register_rfid_cb(INVENTORY_START_EVENT, sa_rfid_start_event_handler);
 				sa_device_register_rfid_cb(INVENTORY_STOP_EVENT, sa_rfid_stop_event_handler);
 				break;
-			case 5:
+			case 6:
+				return 0;
 				exit(1);
 			default:
 				wprintf(L"\nInvalid case:");
