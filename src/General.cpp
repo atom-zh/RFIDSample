@@ -1006,33 +1006,26 @@ RFID_STATUS WriteAccessSingleTag(RFID_HANDLE32  readerHandle)
 	char pBytes[256]; 
 	char *pBuf; 
 	UINT16 temp = 0;
-	char AccessPassword[10];
-	memset(AccessPassword, 0, 10);
-
 
 	memset(writeAccessParams.pWriteData, 0,64);
-	memset(AccessPassword, 0, 10);
-
 
 	pTagID = singleTagAccessInfo.epcID;
 	tagIDLength = singleTagAccessInfo.epcIDLength;
 	lpAccessFilter = NULL;
 
+	sscanf("change", "%x", &writeAccessParams.accessPassword);
 
-	wprintf(L"\nEnter accessPassword");
-	scanf("%s", AccessPassword);
-	sscanf(AccessPassword, "%x", &writeAccessParams.accessPassword);
 	wprintf(L"\nEnter Memorybank   ");
 	wprintf(L"\n 0 for RESERVED ");
 	wprintf(L"\n 1 for EPC  ");
 	wprintf(L"\n 2 for TID  ");
 	wprintf(L"\n 3 for USER\n");
 	scanf("%d", &writeAccessParams.memoryBank);
-	wprintf(L"\nEnter length in bytes   ");
+	wprintf(L"\nEnter length in bytes :");
 	scanf("%hu", &writeAccessParams.writeDataLength);
-	wprintf(L"\nEnter offset in bytes   ");
+	wprintf(L"\nEnter offset in bytes :");
 	scanf("%hu", &writeAccessParams.byteOffset);
-	wprintf(L"\nEnter data to be written   ");
+	wprintf(L"\nEnter data to be written :");
 	scanf("%s", pBytes);
 
 
