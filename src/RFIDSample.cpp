@@ -105,7 +105,7 @@ int sa_device_rfid_read(struct sa_rfid_tag_data *tag_data)
 		tag_data->num = pTagData->tagIDLength;
 		tag_data->rssi = pTagData->peakRSSI;
 		wcstombs(tag_data->id, tagBuffer, sizeof(tag_data->id));
-		wprintf(L"read ID:%S, RSSI:%04d\n", tagBuffer, pTagData->peakRSSI);
+		//wprintf(L"read ID:%S, RSSI:%04d\n", tagBuffer, pTagData->peakRSSI);
 #else
 		printTagDataWithResults(pTagData);
 #endif
@@ -183,19 +183,36 @@ struct sa_rfid_event_cb {
 };
 
 struct sa_rfid_event_cb event_cb = {0};
-
+int last_sig;
 int sa_rfid_read_event_handler(sa_rfid_evt, struct sa_rfid_tag_data *tag_data)
 {
 	static int seq = 0;
-	char vin[18];
+	char vin[25];
 	char cmd[128];
 
 	wprintf(L"seq:%08d\tnum:%d\tID:%s\tRSSI:%04d\n", seq, tag_data->num, tag_data->id, tag_data->rssi);
-	snprintf(vin, 18, tag_data->id);
+
+	snprintf(vin, 25, tag_data->id);
+	//if (!strcmp(vin, "E0000000000000002"))
+	//	sprintf(cmd, "echo LZ5NB9B14LB012379 > /platform_data/misc/events/rfid");
+	//else
+	if (strcmp(vin, "E280117000000216B5D52B3F")) {
+		wprintf(L"tag skip , sig = %d\n", last_sig);
+		return 0;
+	}
+
+	seq++;
+	if (tag_data->rssi == last_sig) {
+		wprintf(L"sig eq, skip , sig = %d\n", last_sig);
+		return 0;
+	}else
+		wprintf(L"sig diff: sig %d != %d\n", tag_data->rssi, last_sig);
+
 	sprintf(cmd, "echo %s > /platform_data/misc/events/rfid", vin);
 	wprintf(L"cmd: %s\n", cmd);
+	last_sig = tag_data->rssi;
 	system(cmd);
-	seq++;
+	sleep(2);
 	return 0;
 }
 
@@ -215,6 +232,7 @@ static void rfid_event_cb(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 {
 	struct sa_rfid_tag_data tag_data;
 
+	wprintf(L"***************************\n");
 	wprintf(L"Call back type %d\n", eventType);
 	switch(eventType) {
 		case TAG_READ_EVENT:
@@ -233,7 +251,9 @@ static void rfid_event_cb(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 		default:
 			break;
 	}
-	sleep(1);
+	//RFID_StopInventory(readerHandle);
+	//sleep(2);
+	//RFID_PerformInventory(readerHandle, NULL, NULL, NULL, NULL);
 }
 
 int sa_device_register_rfid_cb(sa_rfid_evt event_type, sa_rfid_evt_hdlr cb)
@@ -265,7 +285,9 @@ int sa_device_register_rfid_cb(sa_rfid_evt event_type, sa_rfid_evt_hdlr cb)
 int main(int argc, char* argv[])
 {
 	int option = 0;
+	//char host[32] = "localhost";
 	char host[32] = "169.254.78.149";
+	///int port = 0;
 	int port = 5084;
 	WRITE_ACCESS_PARAMS writeAccessParams;
 
@@ -297,6 +319,7 @@ int main(int argc, char* argv[])
 		switch(option) {
 			case 1:
 				sa_device_rfid_open(host, port);
+				sleep(2);
 				break;
 			case 2:
 				sa_device_rfid_close();
@@ -308,7 +331,7 @@ int main(int argc, char* argv[])
 				wprintf(L"Test ID:%s, RSSI:%04d\n", tag_data.id, tag_data.rssi);
 				break;
 			case 4:
-				WriteAccessSingleTag(readerHandle);
+				PerformSingleTagAccess(readerHandle);
 				break;
 			case 5:
 				sa_device_register_rfid_cb(TAG_READ_EVENT, sa_rfid_read_event_handler);
