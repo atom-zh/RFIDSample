@@ -22,11 +22,19 @@ void ConfigurationMenu(RFID_HANDLE32 readerHandle);
 void InventoryMenu(RFID_HANDLE32 readerHandle);
 void AccessMenu(RFID_HANDLE32 readerHandle);
 
+typedef enum _SA_TAG_EVENT
+{	
+	RFID_EVENT_UNKNOWN = 0,
+	RFID_EVENT_ARRIVE = 1,
+	RFID_EVENT_LEAVE = 2,
+	RFID_EVENT_VISIBLE = 3
+}SA_TAG_EVENT;
+
 struct sa_rfid_tag_data {
 	int num;
 	char id[64];
 	char rssi;
-	sa_rfid_evt event_type;
+	TAG_EVENT tag_event;
 	unsigned int tagIDLength; /**< Tag ID Length (Number of Bytes).*/	
 	unsigned int tagIDAllocated; /**<  Memory allocated for Tag ID  (Number of Bytes) .*/
 	unsigned int PC; /**< PC BITS.*/
@@ -57,7 +65,20 @@ int sa_device_rfid_open(char *host, int port)
 		return -1;
 	}
 
-	rfidStatus = RFID_PerformInventory(readerHandle, NULL, NULL, NULL, NULL);
+	TRIGGER_INFO triggerInfo;
+	// tags will be periodically reported in every 10 secs
+	triggerInfo.lpReportTriggers->periodicReportDuration = 2;
+
+	POST_FILTER postFilter;
+	RSSI_RANGE_FILTER rssiRangeFilter;
+	postFilter.lpTagPatternA = NULL;
+	postFilter.lpTagPatternB = NULL;
+	postFilter.lpRSSIRangeFilter = &rssiRangeFilter;
+	rssiRangeFilter.peakRSSILowerLimit = -60;
+	rssiRangeFilter.peakRSSIUpperLimit = -10;
+	rssiRangeFilter.matchRange = WITHIN_RANGE;
+
+	rfidStatus = RFID_PerformInventory(readerHandle, &postFilter, NULL, &triggerInfo, NULL);
 	if(RFID_API_SUCCESS != rfidStatus)
 	{
 		HandleResult(readerHandle, rfidStatus);
@@ -104,6 +125,7 @@ int sa_device_rfid_read(struct sa_rfid_tag_data *tag_data)
 		}
 		tag_data->num = pTagData->tagIDLength;
 		tag_data->rssi = pTagData->peakRSSI;
+		tag_data->tag_event = pTagData->tagEvent;
 		wcstombs(tag_data->id, tagBuffer, sizeof(tag_data->id));
 		//wprintf(L"read ID:%S, RSSI:%04d\n", tagBuffer, pTagData->peakRSSI);
 #else
@@ -173,19 +195,32 @@ sa_rfid_evt rfid_event_types[MAX_EVENTS] =
 	INVENTORY_START_EVENT, INVENTORY_STOP_EVENT, ACCESS_START_EVENT, ACCESS_STOP_EVENT, NXP_EAS_ALARM_EVENT, READER_EXCEPTION_EVENT
 };
 
-typedef int (*sa_rfid_evt_hdlr)(sa_rfid_evt, struct sa_rfid_tag_data *tag_data);
+typedef int (*sa_rfid_evt_hdlr)(SA_TAG_EVENT tag_event, struct sa_rfid_tag_data *tag_data);
 
 struct sa_rfid_event_cb {
 	unsigned int event_num;
-	sa_rfid_evt_hdlr read_cb;
-	sa_rfid_evt_hdlr start_cb;
-	sa_rfid_evt_hdlr stop_cb;
+	sa_rfid_evt_hdlr arrive_cb;
+	sa_rfid_evt_hdlr leave_cb;
+	sa_rfid_evt_hdlr visible_cb;
 };
 
 struct sa_rfid_event_cb event_cb = {0};
-int last_sig;
-int sa_rfid_read_event_handler(sa_rfid_evt, struct sa_rfid_tag_data *tag_data)
+
+int sa_rfid_arrive_event_handler(SA_TAG_EVENT tag_event, struct sa_rfid_tag_data *tag_data)
 {
+	wprintf(L" *** Vehicle arive ***, type:%d\n", tag_event);
+	return 0;
+}
+
+int sa_rfid_leave_event_handler(SA_TAG_EVENT tag_event, struct sa_rfid_tag_data *tag_data)
+{
+	wprintf(L" *** Vehicle leave ***, type:%d\n", tag_event);
+	return 0;
+}
+
+int sa_rfid_visible_event_handler(SA_TAG_EVENT tag_event, struct sa_rfid_tag_data *tag_data)
+{
+	wprintf(L" *** Vehicle visible ***, type:%d\n", tag_event);
 	static int seq = 0;
 	char vin[25];
 	char cmd[128];
@@ -216,64 +251,48 @@ int sa_rfid_read_event_handler(sa_rfid_evt, struct sa_rfid_tag_data *tag_data)
 	return 0;
 }
 
-int sa_rfid_start_event_handler(sa_rfid_evt, struct sa_rfid_tag_data *tag_data)
-{
-	wprintf(L"START type:%d\n", tag_data->event_type);
-	return 0;
-}
-
-int sa_rfid_stop_event_handler(sa_rfid_evt, struct sa_rfid_tag_data *tag_data)
-{
-	wprintf(L"STOP type:%d\n", tag_data->event_type);
-	return 0;
-}
-
 static void rfid_event_cb(RFID_HANDLE32 readerHandle, RFID_EVENT_TYPE eventType)
 {
 	struct sa_rfid_tag_data tag_data;
 
 	wprintf(L"***************************\n");
 	wprintf(L"Call back type %d\n", eventType);
-	switch(eventType) {
-		case TAG_READ_EVENT:
-			sa_device_rfid_read(&tag_data);
-			tag_data.event_type = TAG_READ_EVENT;
-			if (event_cb.read_cb) event_cb.read_cb(TAG_READ_EVENT, &tag_data);
-			break;
-		case INVENTORY_START_EVENT:
-			tag_data.event_type = INVENTORY_START_EVENT;
-			if (event_cb.start_cb) event_cb.start_cb(INVENTORY_START_EVENT, &tag_data);
-			break;
-		case INVENTORY_STOP_EVENT:
-			tag_data.event_type = INVENTORY_STOP_EVENT;
-			if (event_cb.stop_cb) event_cb.stop_cb(INVENTORY_STOP_EVENT, &tag_data);
-			break;
-		default:
-			break;
+	if (eventType == TAG_READ_EVENT) {
+		sa_device_rfid_read(&tag_data);
+		switch(tag_data.tag_event) {
+			case NEW_TAG_VISIBLE:
+			case TAG_BACK_TO_VISIBILITY:
+				if (event_cb.arrive_cb) event_cb.arrive_cb(RFID_EVENT_ARRIVE, &tag_data);
+				break;
+			case TAG_NOT_VISIBLE:
+				if (event_cb.leave_cb) event_cb.leave_cb(RFID_EVENT_LEAVE, &tag_data);
+			case TAG_MOVING:
+			case TAG_STATIONARY:
+				if (event_cb.visible_cb) event_cb.visible_cb(RFID_EVENT_VISIBLE, &tag_data);
+			default:
+				break;
+		}
 	}
-	//RFID_StopInventory(readerHandle);
-	//sleep(2);
-	//RFID_PerformInventory(readerHandle, NULL, NULL, NULL, NULL);
 }
 
-int sa_device_register_rfid_cb(sa_rfid_evt event_type, sa_rfid_evt_hdlr cb)
+int sa_device_register_rfid_cb(SA_TAG_EVENT tag_event, sa_rfid_evt_hdlr cb)
 {
 
-	switch(event_type) {
-		case TAG_READ_EVENT:
-			event_cb.read_cb = cb;
+	switch(tag_event) {
+		case RFID_EVENT_ARRIVE:
+			event_cb.arrive_cb = cb;
 			break;
-		case INVENTORY_START_EVENT:
-			event_cb.start_cb = cb;
+		case RFID_EVENT_LEAVE:
+			event_cb.leave_cb = cb;
 			break;
-		case INVENTORY_STOP_EVENT:
-			event_cb.stop_cb = cb;
+		case RFID_EVENT_VISIBLE:
+			event_cb.visible_cb = cb;
 			break;
 		default:
 			break;
 	}
 	
-	wprintf(L"register type %d\n", event_type);
+	wprintf(L"register type %d\n", tag_event);
 	if (event_cb.event_num <= 0) {
 		RFID_RegisterEventNotificationCallback(readerHandle, (RFID_EVENT_TYPE *)rfid_event_types, \
 			MAX_EVENTS, (RfidEventCallbackFunction) rfid_event_cb, NULL, NULL);
@@ -334,9 +353,9 @@ int main(int argc, char* argv[])
 				PerformSingleTagAccess(readerHandle);
 				break;
 			case 5:
-				sa_device_register_rfid_cb(TAG_READ_EVENT, sa_rfid_read_event_handler);
-				sa_device_register_rfid_cb(INVENTORY_START_EVENT, sa_rfid_start_event_handler);
-				sa_device_register_rfid_cb(INVENTORY_STOP_EVENT, sa_rfid_stop_event_handler);
+				sa_device_register_rfid_cb(RFID_EVENT_VISIBLE, sa_rfid_visible_event_handler);
+				sa_device_register_rfid_cb(RFID_EVENT_ARRIVE, sa_rfid_arrive_event_handler);
+				sa_device_register_rfid_cb(RFID_EVENT_LEAVE, sa_rfid_leave_event_handler);
 				break;
 			case 6:
 				return 0;
